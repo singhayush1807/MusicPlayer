@@ -43,6 +43,14 @@ export function useListenTogether(
   onSyncAction: (action: SyncAction) => void,
   getLocalState: () => { trackIndex: number; currentTime: number; isPlaying: boolean }
 ) {
+  const onSyncActionRef = useRef(onSyncAction);
+  const getLocalStateRef = useRef(getLocalState);
+
+  useEffect(() => {
+    onSyncActionRef.current = onSyncAction;
+    getLocalStateRef.current = getLocalState;
+  }, [onSyncAction, getLocalState]);
+
   const [state, setState] = useState<ListenTogetherState>({
     isConnected: false,
     isInRoom: false,
@@ -103,7 +111,7 @@ export function useListenTogether(
         // If someone else joined, broadcast our state to them
         const isMe = newPresences.some(p => p.id === myId.current);
         if (!isMe) {
-          const st = getLocalState();
+          const st = getLocalStateRef.current();
           channel.send({
             type: 'broadcast',
             event: 'sync',
@@ -158,14 +166,14 @@ export function useListenTogether(
         const action = payload.payload as SyncAction;
         if (action) {
           if (action.type === 'request_sync') {
-            const st = getLocalState();
+            const st = getLocalStateRef.current();
             channel.send({
               type: 'broadcast',
               event: 'sync',
               payload: { type: 'heartbeat', ...st }
             });
           } else {
-            onSyncAction(action);
+            onSyncActionRef.current(action);
           }
         }
       })
@@ -186,7 +194,7 @@ export function useListenTogether(
         // If someone else joined, broadcast our state to them
         const isMe = newPresences.some(p => p.id === myId.current);
         if (!isMe) {
-          const st = getLocalState();
+          const st = getLocalStateRef.current();
           channel.send({
             type: 'broadcast',
             event: 'sync',

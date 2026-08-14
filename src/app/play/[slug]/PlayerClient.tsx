@@ -682,8 +682,8 @@ export default function PlayerClient({ theme }: { theme: any }) {
                 <span>{together.memberCount} {together.memberCount === 1 ? 'listener' : 'listeners'}</span>
               </div>
 
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textAlign: 'center', marginTop: '16px', lineHeight: '1.5' }}>
-                Everyone in this room can control playback.
+              <p className="together-info-text">
+                Everyone in this room can control playback.<br/>
                 Share the code with up to 4 friends.
               </p>
 
