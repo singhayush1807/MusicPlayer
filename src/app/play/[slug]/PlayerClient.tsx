@@ -656,7 +656,7 @@ export default function PlayerClient({ theme }: { theme: any }) {
           <button className="panel-close" onClick={() => setActivePanel('none')}>✕</button>
         </div>
         <div className="panel-body together-body">
-          {!together.isInRoom ? (
+          {!together.isInRoom && !together.isConnected ? (
             <div className="together-menu">
               <p className="together-desc">Listen together in perfect sync.</p>
               <button className="together-btn create" onClick={() => { together.createRoom(); }}>
@@ -681,6 +681,11 @@ export default function PlayerClient({ theme }: { theme: any }) {
               {together.error && (
                 <p className="together-error">{together.error}</p>
               )}
+            </div>
+          ) : !together.isConnected ? (
+            <div className="together-connecting">
+              <div className="together-connecting-spinner"></div>
+              <span className="together-connecting-text">Connecting...</span>
             </div>
           ) : (
             <div className="together-connected">

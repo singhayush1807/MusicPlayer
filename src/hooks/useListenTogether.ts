@@ -91,6 +91,9 @@ export function useListenTogether(
     const code = generateRoomCode();
     const channelName = `room-${code}`;
 
+    // Show connecting state immediately
+    setState(s => ({ ...s, isInRoom: true, roomCode: code, error: null }));
+
     const channel = supabase.channel(channelName, {
       config: { broadcast: { self: false } },
     });
@@ -174,6 +177,9 @@ export function useListenTogether(
       setState(s => ({ ...s, error: 'Enter a valid 6-character room code' }));
       return;
     }
+
+    // Show connecting state immediately
+    setState(s => ({ ...s, isInRoom: true, roomCode: cleanCode, error: null }));
 
     const channelName = `room-${cleanCode}`;
 
