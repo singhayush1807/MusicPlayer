@@ -147,7 +147,7 @@ export default function AdminDashboard() {
     <div style={{ background: '#1a1a1a', padding: '15px', borderRadius: '8px', border: '1px solid #333' }}>
       <label style={{ display: 'block', marginBottom: '10px', fontSize: '13px', color: '#aaa', fontWeight: 600 }}>{label}</label>
       {value ? (
-        <div style={{ position: 'relative', height: '100px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #444', group: 'true' }}>
+        <div style={{ position: 'relative', height: '100px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #444' }}>
           <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           <div style={{ position: 'absolute', top: '5px', right: '5px', background: 'rgba(0,0,0,0.7)', borderRadius: '50%', padding: '4px' }}>
             <FiCheckCircle color="#4ade80" />

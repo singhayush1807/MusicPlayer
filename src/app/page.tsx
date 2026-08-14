@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import prisma from '@/lib/db';
-import { FiPlay, FiMusic, FiArrowRight } from 'react-icons/line'; // Wait, let's just use regular react-icons/fi
-import { FiPlay as FiPlayFill, FiHeadphones, FiArrowUpRight } from 'react-icons/fi';
+import { FiPlay, FiMusic, FiArrowRight, FiHeadphones, FiArrowUpRight } from 'react-icons/fi';
 
 export default async function ExplorePage() {
   const themes = await prisma.theme.findMany({

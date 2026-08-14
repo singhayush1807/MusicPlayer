@@ -347,13 +347,12 @@ export default function PlayerClient({ theme }: { theme: any }) {
       {/* Gradient overlay */}
       <div suppressHydrationWarning className="scene-overlay"></div>
 
-      {/* Particles */}
       <div suppressHydrationWarning id="particles" className="particle-layer">
         {petals.map(p => (
           <div key={p.id} className="petal" style={{
             width: `${p.size}px`, height: `${p.size}px`, background: p.bg, left: `${p.left}%`,
-            '--drift': `${p.drift}px` as any, animation: `petal-fall ${p.dur}s ease-in-out ${p.del}s infinite`
-          }}></div>
+            '--drift': `${p.drift}px`, animation: `petal-fall ${p.dur}s ease-in-out ${p.del}s infinite`
+          } as React.CSSProperties & { [key: string]: any }}></div>
         ))}
       </div>
       <div suppressHydrationWarning id="hearts" className="heart-layer">
