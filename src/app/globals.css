@@ -248,6 +248,8 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
   .pa-btn svg { width: 12px; height: 12px; }
   .panel.open { bottom: calc(var(--player-h) + 20px); max-height: 55vh; }
   .kbd-hints-inline { display: none; }
+  .together-input { font-size: 14px !important; letter-spacing: 0.2em !important; padding: 12px 10px !important; }
+  .together-btn.join { padding: 12px 20px !important; font-size: 13px !important; }
 }
 
 /* Extra small (iPhone SE etc) */
@@ -298,6 +300,78 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
 @keyframes pulse-play { 0%,100% { box-shadow: 0 4px 16px rgba(255,255,255,0.2); }
   50% { box-shadow: 0 4px 24px var(--accent-glow), 0 0 30px var(--accent-glow); } }
 @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ===== LISTEN TOGETHER ===== */
+.together-menu { display: flex; flex-direction: column; align-items: center; }
+.together-btn { display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 14px 20px; border: none; border-radius: 14px;
+  font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.25s ease;
+  font-family: var(--font-display); letter-spacing: 0.3px; }
+.together-btn.create { background: linear-gradient(135deg, #a855f7, #6366f1);
+  color: #fff; box-shadow: 0 4px 20px rgba(139, 92, 246, 0.35); }
+.together-btn.create:hover { box-shadow: 0 6px 28px rgba(139, 92, 246, 0.5); transform: translateY(-1px); }
+.together-btn.join { background: #fff !important; color: #111 !important; flex-shrink: 0;
+  padding: 14px 24px; border-radius: 14px; font-weight: 800; font-family: sans-serif; }
+.together-btn.join:hover { background: #eee !important; }
+.together-btn.disconnect { background: rgba(255,70,70,0.15); color: #ff6b6b;
+  border: 1px solid rgba(255,70,70,0.25); margin-top: 20px; }
+.together-btn.disconnect:hover { background: rgba(255,70,70,0.25); }
+
+.together-divider { display: flex; align-items: center; gap: 16px; width: 100%;
+  margin: 18px 0; color: rgba(255,255,255,0.3); font-size: 12px; }
+.together-divider::before, .together-divider::after {
+  content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.1); }
+
+.together-join-row { display: flex; gap: 10px; width: 100%; }
+.together-input { flex: 1; padding: 14px 16px; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
+  color: #fff; font-size: 16px; font-family: var(--font-mono);
+  letter-spacing: 0.4em; text-align: center; text-transform: uppercase;
+  outline: none; transition: border 0.2s; }
+.together-input:focus { border-color: rgba(139, 92, 246, 0.6); }
+.together-input::placeholder { letter-spacing: 0.1em; font-size: 12px; color: rgba(255,255,255,0.3); }
+
+.together-connected { display: flex; flex-direction: column; align-items: center; }
+.together-status-badge { display: flex; align-items: center; gap: 8px;
+  background: rgba(74, 222, 128, 0.12); border: 1px solid rgba(74, 222, 128, 0.25);
+  padding: 8px 20px; border-radius: 999px; color: #4ade80;
+  font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+.together-pulse { width: 8px; height: 8px; border-radius: 50%;
+  background: #4ade80; animation: together-glow 2s ease-in-out infinite; }
+@keyframes together-glow { 0%,100% { box-shadow: 0 0 4px #4ade80; } 50% { box-shadow: 0 0 14px #4ade80, 0 0 28px rgba(74,222,128,0.3); } }
+
+.together-code-display { text-align: center; margin-bottom: 20px; }
+.together-code-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.4); margin-bottom: 8px; font-family: var(--font-mono); }
+.together-code { font-family: var(--font-mono); font-size: 36px; font-weight: 800;
+  letter-spacing: 0.25em; color: #fff;
+  background: linear-gradient(135deg, #a855f7, #6366f1);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; margin-bottom: 12px; }
+.together-copy-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.7); padding: 8px 16px; border-radius: 8px;
+  font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.together-copy-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+.together-members { display: flex; align-items: center; gap: 8px;
+  color: rgba(255,255,255,0.5); font-size: 13px;
+  padding: 8px 16px; background: rgba(255,255,255,0.04);
+  border-radius: 8px; }
+
+/* Together button active glow when connected */
+.pa-btn.together-active { color: #a855f7 !important; position: relative; }
+.pa-btn.together-active::after { content: ''; position: absolute; top: 2px; right: 2px;
+  width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+  box-shadow: 0 0 6px #4ade80; }
+
+/* Day mode overrides for Together */
+.day-mode .together-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #111; }
+.day-mode .together-input:focus { border-color: rgba(139, 92, 246, 0.5); }
+.day-mode .together-btn.join { background: #111; color: #fff; }
+.day-mode .together-copy-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.1); color: #333; }
+.day-mode .together-members { background: rgba(0,0,0,0.04); color: #555; }
+.day-mode .together-divider { color: rgba(0,0,0,0.3); }
+.day-mode .together-divider::before, .day-mode .together-divider::after { background: rgba(0,0,0,0.1); }
 
 /* ===== DAY MODE OVERRIDES ===== */
 .day-mode { color: #222; }

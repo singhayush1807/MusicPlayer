@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useListenTogether, type SyncAction } from '@/hooks/useListenTogether';
 
 export default function PlayerClient({ theme }: { theme: any }) {
   const [playerReady, setPlayerReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [mode, setMode] = useState<'night' | 'day'>('night');
   const [rainEnabled, setRainEnabled] = useState(false);
-  const [activePanel, setActivePanel] = useState<'none' | 'songlist' | 'lyrics'>('none');
+  const [activePanel, setActivePanel] = useState<'none' | 'songlist' | 'lyrics' | 'together'>('none');
   const [clock, setClock] = useState('00:00');
+  const [joinCode, setJoinCode] = useState('');
+  const [codeCopied, setCodeCopied] = useState(false);
+  const syncLock = useRef(false);
   
   // Track info
   const [title, setTitle] = useState('Loading...');
@@ -277,7 +281,7 @@ export default function PlayerClient({ theme }: { theme: any }) {
       .finally(() => setLyricsLoading(false));
   };
 
-  const togglePanel = (panel: 'none' | 'songlist' | 'lyrics') => {
+  const togglePanel = (panel: 'none' | 'songlist' | 'lyrics' | 'together') => {
     if (activePanel === panel) {
       setActivePanel('none');
     } else {
@@ -288,16 +292,91 @@ export default function PlayerClient({ theme }: { theme: any }) {
     }
   };
 
+  // ── Listen Together Sync Callback ──
+  const handleSyncAction = useCallback((action: SyncAction) => {
+    if (!ytPlayer.current) return;
+    syncLock.current = true;
+    try {
+      switch (action.type) {
+        case 'play':
+          if (typeof action.trackIndex === 'number' && action.trackIndex !== currentIndex) {
+            ytPlayer.current.playVideoAt(action.trackIndex);
+          }
+          if (typeof action.currentTime === 'number') {
+            ytPlayer.current.seekTo(action.currentTime, true);
+          }
+          ytPlayer.current.playVideo();
+          break;
+        case 'pause':
+          if (typeof action.currentTime === 'number') {
+            ytPlayer.current.seekTo(action.currentTime, true);
+          }
+          ytPlayer.current.pauseVideo();
+          break;
+        case 'seek':
+          if (typeof action.currentTime === 'number') {
+            ytPlayer.current.seekTo(action.currentTime, true);
+          }
+          break;
+        case 'next':
+          ytPlayer.current.nextVideo();
+          break;
+        case 'prev':
+          ytPlayer.current.previousVideo();
+          break;
+        case 'heartbeat':
+          // Only apply heartbeat if significantly out of sync (>3s)
+          if (typeof action.currentTime === 'number' && Math.abs(currentTime - action.currentTime) > 3) {
+            ytPlayer.current.seekTo(action.currentTime, true);
+          }
+          if (typeof action.trackIndex === 'number' && action.trackIndex !== currentIndex) {
+            ytPlayer.current.playVideoAt(action.trackIndex);
+          }
+          if (action.isPlaying && !isPlaying) ytPlayer.current.playVideo();
+          if (!action.isPlaying && isPlaying) ytPlayer.current.pauseVideo();
+          break;
+      }
+    } finally {
+      setTimeout(() => { syncLock.current = false; }, 500);
+    }
+  }, [currentIndex, currentTime, isPlaying]);
+
+  const together = useListenTogether(handleSyncAction);
+
+  const copyRoomCode = () => {
+    if (together.roomCode) {
+      navigator.clipboard.writeText(together.roomCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    }
+  };
+
   const togglePlay = () => {
     if (!ytPlayer.current) return;
     if (isPlaying && typeof ytPlayer.current.pauseVideo === 'function') {
       ytPlayer.current.pauseVideo();
+      if (together.isInRoom && !syncLock.current) {
+        together.broadcastAction({ type: 'pause', currentTime: ytPlayer.current.getCurrentTime?.() || 0 });
+      }
     } else if (typeof ytPlayer.current.playVideo === 'function') {
       ytPlayer.current.playVideo();
+      if (together.isInRoom && !syncLock.current) {
+        together.broadcastAction({ type: 'play', trackIndex: currentIndex, currentTime: ytPlayer.current.getCurrentTime?.() || 0 });
+      }
     }
   };
-  const nextTrack = () => ytPlayer.current?.nextVideo && ytPlayer.current.nextVideo();
-  const prevTrack = () => ytPlayer.current?.previousVideo && ytPlayer.current.previousVideo();
+  const nextTrack = () => {
+    ytPlayer.current?.nextVideo && ytPlayer.current.nextVideo();
+    if (together.isInRoom && !syncLock.current) {
+      together.broadcastAction({ type: 'next' });
+    }
+  };
+  const prevTrack = () => {
+    ytPlayer.current?.previousVideo && ytPlayer.current.previousVideo();
+    if (together.isInRoom && !syncLock.current) {
+      together.broadcastAction({ type: 'prev' });
+    }
+  };
   
   const toggleShuffle = () => {
     if (!ytPlayer.current || typeof ytPlayer.current.setShuffle !== 'function') return;
@@ -475,6 +554,74 @@ export default function PlayerClient({ theme }: { theme: any }) {
         </div>
       </div>
 
+      {/* Listen Together Panel */}
+      <div id="together-panel" className={`panel ${activePanel === 'together' ? 'open' : ''}`}>
+        <div className="panel-header">
+          <span className="panel-label">🔗 Listen Together</span>
+          <button className="panel-close" onClick={() => setActivePanel('none')}>✕</button>
+        </div>
+        <div className="panel-body" style={{ padding: '20px' }}>
+          {!together.isInRoom ? (
+            <div className="together-menu">
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px', textAlign: 'center' }}>
+                Listen to the same music with someone special — in perfect sync.
+              </p>
+              <button className="together-btn create" onClick={() => { together.createRoom(); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                Create Room
+              </button>
+              <div className="together-divider"><span>or</span></div>
+              <div className="together-join-row">
+                <input
+                  type="text"
+                  className="together-input"
+                  placeholder="Enter 6-digit code"
+                  maxLength={6}
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => { if (e.key === 'Enter') together.joinRoom(joinCode); }}
+                />
+                <button className="together-btn join" onClick={() => together.joinRoom(joinCode)}>
+                  Join
+                </button>
+              </div>
+              {together.error && (
+                <p style={{ color: '#ff6b6b', fontSize: '12px', marginTop: '12px', textAlign: 'center' }}>{together.error}</p>
+              )}
+            </div>
+          ) : (
+            <div className="together-connected">
+              <div className="together-status-badge">
+                <span className="together-pulse"></span>
+                <span>Connected</span>
+              </div>
+
+              <div className="together-code-display">
+                <div className="together-code-label">Room Code</div>
+                <div className="together-code">{together.roomCode}</div>
+                <button className="together-copy-btn" onClick={copyRoomCode}>
+                  {codeCopied ? '✓ Copied!' : '📋 Copy Code'}
+                </button>
+              </div>
+
+              <div className="together-members">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>{together.memberCount} {together.memberCount === 1 ? 'listener' : 'listeners'}</span>
+              </div>
+
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', textAlign: 'center', marginTop: '16px', lineHeight: '1.5' }}>
+                Everyone in this room can control playback.
+                Share the code with up to 4 friends.
+              </p>
+
+              <button className="together-btn disconnect" onClick={() => { together.disconnect(); setJoinCode(''); }}>
+                Disconnect
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Player matched exactly to index.html structure */}
       <div id="player">
         <div className="player-content">
@@ -499,14 +646,22 @@ export default function PlayerClient({ theme }: { theme: any }) {
                   const r = e.currentTarget.getBoundingClientRect();
                   let pct = (e.clientX - r.left) / r.width;
                   pct = Math.max(0, Math.min(1, pct));
-                  ytPlayer.current.seekTo(duration * pct, true);
+                  const seekTime = duration * pct;
+                  ytPlayer.current.seekTo(seekTime, true);
+                  if (together.isInRoom && !syncLock.current) {
+                    together.broadcastAction({ type: 'seek', currentTime: seekTime });
+                  }
                 }}
                 onTouchMove={(e) => {
                   if (!ytPlayer.current || typeof ytPlayer.current.seekTo !== 'function') return;
                   const r = e.currentTarget.getBoundingClientRect();
                   let pct = (e.touches[0].clientX - r.left) / r.width;
                   pct = Math.max(0, Math.min(1, pct));
-                  ytPlayer.current.seekTo(duration * pct, true);
+                  const seekTime = duration * pct;
+                  ytPlayer.current.seekTo(seekTime, true);
+                  if (together.isInRoom && !syncLock.current) {
+                    together.broadcastAction({ type: 'seek', currentTime: seekTime });
+                  }
                 }}
               >
                 <div className="player-progress-fill" id="progress-fill" style={{ width: `${progressPct}%` }}></div>
@@ -545,6 +700,10 @@ export default function PlayerClient({ theme }: { theme: any }) {
           <button className={`pa-btn ${activePanel === 'lyrics' ? 'active' : ''}`} id="lyrics-btn" onClick={() => togglePanel('lyrics')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             <span>Lyrics</span>
+          </button>
+          <button className={`pa-btn ${activePanel === 'together' ? 'active' : ''} ${together.isInRoom ? 'together-active' : ''}`} id="together-btn" onClick={() => togglePanel('together')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span>{together.isInRoom ? 'Synced' : 'Together'}</span>
           </button>
         </div>
       </div>
