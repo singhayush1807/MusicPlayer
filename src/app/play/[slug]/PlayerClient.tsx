@@ -475,8 +475,11 @@ export default function PlayerClient({ theme }: { theme: any }) {
 
       {/* Premium Loading Screen */}
       <div className={`loading-screen ${appLoaded ? 'fade-out' : ''}`}>
-        <div className="loading-spinner"></div>
-        <div className="loading-text">Tuning into the universe...</div>
+        <div className="loading-logo-wrap">
+          <div className="loading-logo-circle"></div>
+          <div className="loading-logo-icon">♫</div>
+        </div>
+        <div className="loading-text">MusicPrime</div>
       </div>
 
       {/* Background Layers */}
