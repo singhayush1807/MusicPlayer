@@ -61,10 +61,22 @@ export default function PlayerClient({ theme }: { theme: any }) {
 
     setMounted(true);
     
-    // Fade out loading screen after a short delay
-    setTimeout(() => {
-      setAppLoaded(true);
-    }, 800);
+    // Fade out loading screen after minimum duration (ensures animation is seen)
+    const loadStart = Date.now();
+    const MIN_LOADING_MS = 1800;
+    const finishLoading = () => {
+      const elapsed = Date.now() - loadStart;
+      const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+      setTimeout(() => setAppLoaded(true), remaining);
+    };
+    // Wait for fonts + images to settle, then respect minimum
+    if (document.readyState === 'complete') {
+      finishLoading();
+    } else {
+      window.addEventListener('load', finishLoading, { once: true });
+      // Fallback in case 'load' already fired
+      setTimeout(finishLoading, 3000);
+    }
     
     // Init Petals
     const p = [];
@@ -475,11 +487,18 @@ export default function PlayerClient({ theme }: { theme: any }) {
 
       {/* Premium Loading Screen */}
       <div className={`loading-screen ${appLoaded ? 'fade-out' : ''}`}>
-        <div className="loading-logo-wrap">
-          <div className="loading-logo-circle"></div>
-          <div className="loading-logo-icon">♫</div>
+        <div className="loading-cube-scene">
+          <div className="loading-cube">
+            <div className="loading-cube-face front">♫</div>
+            <div className="loading-cube-face back">♪</div>
+            <div className="loading-cube-face right">♩</div>
+            <div className="loading-cube-face left">♬</div>
+            <div className="loading-cube-face top">❤</div>
+            <div className="loading-cube-face bottom">✨</div>
+          </div>
         </div>
-        <div className="loading-text">MusicPrime</div>
+        <div className="loading-brand">MusicPrime</div>
+        <div className="loading-bar-track"><div className="loading-bar-fill"></div></div>
       </div>
 
       {/* Background Layers */}
@@ -636,14 +655,12 @@ export default function PlayerClient({ theme }: { theme: any }) {
           <span className="panel-label">🔗 Listen Together</span>
           <button className="panel-close" onClick={() => setActivePanel('none')}>✕</button>
         </div>
-        <div className="panel-body" style={{ padding: '20px' }}>
+        <div className="panel-body together-body">
           {!together.isInRoom ? (
             <div className="together-menu">
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px', textAlign: 'center' }}>
-                Listen to the same music with someone special — in perfect sync.
-              </p>
+              <p className="together-desc">Listen together in perfect sync.</p>
               <button className="together-btn create" onClick={() => { together.createRoom(); }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
                 Create Room
               </button>
               <div className="together-divider"><span>or</span></div>
@@ -651,7 +668,7 @@ export default function PlayerClient({ theme }: { theme: any }) {
                 <input
                   type="text"
                   className="together-input"
-                  placeholder="Enter 6-digit code"
+                  placeholder="CODE"
                   maxLength={6}
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -662,33 +679,27 @@ export default function PlayerClient({ theme }: { theme: any }) {
                 </button>
               </div>
               {together.error && (
-                <p style={{ color: '#ff6b6b', fontSize: '12px', marginTop: '12px', textAlign: 'center' }}>{together.error}</p>
+                <p className="together-error">{together.error}</p>
               )}
             </div>
           ) : (
             <div className="together-connected">
               <div className="together-status-badge">
                 <span className="together-pulse"></span>
-                <span>Connected</span>
+                Connected
               </div>
 
               <div className="together-code-display">
-                <div className="together-code-label">Room Code</div>
                 <div className="together-code">{together.roomCode}</div>
-                <button className="together-copy-btn" onClick={copyRoomCode}>
-                  {codeCopied ? '✓ Copied!' : '📋 Copy Code'}
-                </button>
+                <div className="together-code-actions">
+                  <button className="together-copy-btn" onClick={copyRoomCode}>
+                    {codeCopied ? '✓ Copied!' : 'Copy Code'}
+                  </button>
+                  <span className="together-members-badge">
+                    {together.memberCount} {together.memberCount === 1 ? 'listener' : 'listeners'}
+                  </span>
+                </div>
               </div>
-
-              <div className="together-members">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                <span>{together.memberCount} {together.memberCount === 1 ? 'listener' : 'listeners'}</span>
-              </div>
-
-              <p className="together-info-text">
-                Everyone in this room can control playback.<br/>
-                Share the code with up to 4 friends.
-              </p>
 
               <button className="together-btn disconnect" onClick={() => { 
                 together.disconnect(); 
