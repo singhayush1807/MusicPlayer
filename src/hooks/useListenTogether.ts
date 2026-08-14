@@ -12,7 +12,8 @@ export type SyncAction =
   | { type: 'next' }
   | { type: 'prev' }
   | { type: 'heartbeat'; trackIndex: number; currentTime: number; isPlaying: boolean }
-  | { type: 'request_sync' };
+  | { type: 'request_sync' }
+  | { type: 'close_room' };
 
 export interface RoomMember {
   id: string;
@@ -25,6 +26,7 @@ export interface ListenTogetherState {
   roomCode: string | null;
   memberCount: number;
   error: string | null;
+  isOwner: boolean;
 }
 
 // ─── Code Generator ──────────────────────────────────
@@ -57,7 +59,11 @@ export function useListenTogether(
     roomCode: null,
     memberCount: 0,
     error: null,
+    isOwner: false,
   });
+
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const myId = useRef<string>(Math.random().toString(36).substring(2, 10));
@@ -92,7 +98,20 @@ export function useListenTogether(
     channel
       .on('broadcast', { event: 'sync' }, (payload) => {
         const action = payload.payload as SyncAction;
-        if (action) onSyncAction(action);
+        if (action) {
+          if (action.type === 'close_room') {
+            disconnect();
+          } else if (action.type === 'request_sync') {
+            const st = getLocalStateRef.current();
+            channel.send({
+              type: 'broadcast',
+              event: 'sync',
+              payload: { type: 'heartbeat', ...st }
+            });
+          } else {
+            onSyncActionRef.current(action);
+          }
+        }
       })
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
@@ -135,6 +154,7 @@ export function useListenTogether(
             isInRoom: true,
             roomCode: code,
             error: null,
+            isOwner: true,
           }));
         }
       });
@@ -165,7 +185,9 @@ export function useListenTogether(
       .on('broadcast', { event: 'sync' }, (payload) => {
         const action = payload.payload as SyncAction;
         if (action) {
-          if (action.type === 'request_sync') {
+          if (action.type === 'close_room') {
+            disconnect();
+          } else if (action.type === 'request_sync') {
             const st = getLocalStateRef.current();
             channel.send({
               type: 'broadcast',
@@ -218,6 +240,7 @@ export function useListenTogether(
             isInRoom: true,
             roomCode: cleanCode,
             error: null,
+            isOwner: false,
           }));
           
           // Request initial state from others in the room
@@ -249,6 +272,13 @@ export function useListenTogether(
       heartbeatInterval.current = null;
     }
     if (channelRef.current) {
+      if (stateRef.current.isOwner) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'close_room' }
+        });
+      }
       channelRef.current.unsubscribe();
       channelRef.current = null;
     }
@@ -258,6 +288,7 @@ export function useListenTogether(
       roomCode: null,
       memberCount: 0,
       error: null,
+      isOwner: false,
     });
   }, []);
 

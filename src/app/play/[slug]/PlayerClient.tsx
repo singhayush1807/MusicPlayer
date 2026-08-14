@@ -687,7 +687,13 @@ export default function PlayerClient({ theme }: { theme: any }) {
                 Share the code with up to 4 friends.
               </p>
 
-              <button className="together-btn disconnect" onClick={() => { together.disconnect(); setJoinCode(''); }}>
+              <button className="together-btn disconnect" onClick={() => { 
+                together.disconnect(); 
+                setJoinCode(''); 
+                if (ytPlayer.current && typeof ytPlayer.current.pauseVideo === 'function') {
+                  ytPlayer.current.pauseVideo();
+                }
+              }}>
                 Disconnect
               </button>
             </div>

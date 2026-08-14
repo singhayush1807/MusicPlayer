@@ -387,16 +387,18 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
   box-shadow: 0 0 6px #4ade80; }
 
 /* Day mode overrides for Together */
-.day-mode .together-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #111; }
-.day-mode .together-input:focus { border-color: rgba(139, 92, 246, 0.5); }
-.day-mode .together-btn.join { background: #111 !important; color: #fff !important; }
+.day-mode .together-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #111; font-weight: 600; }
+.day-mode .together-input::placeholder { color: rgba(0,0,0,0.3) !important; }
+.day-mode .together-input:focus { border-color: rgba(139, 92, 246, 0.5); background: rgba(255,255,255,0.8); }
+.day-mode .together-btn.join { background: linear-gradient(135deg, #a855f7, #6366f1) !important; color: #fff !important; font-weight: 600; box-shadow: 0 4px 12px rgba(168,85,247,0.3); border: none; }
 .day-mode .together-copy-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.15); color: #111; font-weight: 600; }
+.day-mode .together-copy-btn:hover { background: rgba(0,0,0,0.1); }
 .day-mode .together-members { background: rgba(0,0,0,0.05); color: #333; font-weight: 600; }
-.day-mode .together-divider { color: rgba(0,0,0,0.3); }
-.day-mode .together-divider::before, .day-mode .together-divider::after { background: rgba(0,0,0,0.1); }
-.day-mode .together-menu p, .day-mode .together-code-label, .day-mode .together-info-text { color: rgba(0,0,0,0.6) !important; }
+.day-mode .together-divider { color: rgba(0,0,0,0.3); font-weight: 600; }
+.day-mode .together-divider::before, .day-mode .together-divider::after { background: rgba(0,0,0,0.15); }
+.day-mode .together-menu p, .day-mode .together-code-label, .day-mode .together-info-text { color: rgba(0,0,0,0.6) !important; font-weight: 500; }
 .day-mode .together-connected p { color: rgba(0,0,0,0.6) !important; }
-.day-mode .together-btn.disconnect { background: rgba(255,51,102,0.1); border-color: rgba(255,51,102,0.3); color: #d00030; }
+.day-mode .together-btn.disconnect { background: rgba(255,51,102,0.1); border-color: rgba(255,51,102,0.3); color: #d00030; font-weight: 600; }
 
 /* ===== DAY MODE OVERRIDES ===== */
 .day-mode { color: #222; }
@@ -434,7 +436,7 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
 .day-mode .player-progress-fill { background: #FF3366; }
 .day-mode .player-progress-thumb { background: #FF3366; }
 .day-mode .scene-overlay { background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.0) 50%, rgba(255,255,255,0.4) 100%); }
-.day-mode .panel { background: rgba(255,255,255,0.95); border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+.day-mode .panel { background: rgba(255,255,255,0.65); border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 10px 40px rgba(0,0,0,0.1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .day-mode .panel-body, .day-mode .lyrics-text { color: #333; }
 .day-mode .panel-close { background: rgba(0,0,0,0.05); color: #333; border-color: rgba(0,0,0,0.1); }
 .day-mode .panel-placeholder { color: rgba(0,0,0,0.4); }
