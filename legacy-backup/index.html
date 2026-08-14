@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>प्यार भरे गीत — Pyar Bhare Geet</title>
+<meta name="description" content="प्यार भरे गीत सुनो — romantic Hindi love songs, non-stop, free.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="assets/logo.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/logo.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- BG Image layers — two layers for smooth crossfade between day/night -->
+<div class="bg-layer" id="bg-layer-a"></div>
+<div class="bg-layer" id="bg-layer-b"></div>
+
+<!-- Rain overlay -->
+<div id="rain" class="rain-layer"></div>
+
+<!-- Gradient overlay for text readability -->
+<div class="scene-overlay"></div>
+
+<!-- Floating particles (hearts/petals) -->
+<div id="particles" class="particle-layer"></div>
+<div id="hearts" class="heart-layer"></div>
+
+<!-- UI -->
+<div id="ui">
+  <header>
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="#ff80a6" stroke-width="1.8" fill="rgba(255,128,166,0.15)"/>
+          <path d="M13.5 8v5.25c0 1.24-1.01 2.25-2.25 2.25S9 14.49 9 13.25s1.01-2.25 2.25-2.25V9.5h3.5V8h-1.25z" fill="#d4af37"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">प्यार भरे गीत</div>
+        <div class="brand-sub">Lo-fi love · all night</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="clock" id="clock">00:00</div>
+      <div class="listeners">
+        <span class="live-dot"></span>
+        <span class="jitter-heart">💕</span> दिल जुड़े
+      </div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-count" id="track-count">गीत · बिना रुके</div>
+    <h1 class="hero-title" id="hero-title">प्यार भरे<br>गीत</h1>
+    <div class="hero-sub">
+      <span class="hero-line"></span>
+      दो दिल · एक रात
+      <span class="hero-line"></span>
+    </div>
+  </div>
+
+  <!-- Mode toggles -->
+  <div class="mode-bar">
+    <button class="mode-btn active" id="night-btn" data-mode="night">
+      <span class="mode-icon">🌙</span> Night
+    </button>
+    <button class="mode-btn" id="day-btn" data-mode="day">
+      <span class="mode-icon">☀️</span> Day
+    </button>
+    <button class="mode-btn" id="rain-btn">
+      <span class="mode-icon">🌧️</span> Rain
+    </button>
+  </div>
+  
+  <div class="kbd-hints-inline">
+    <kbd>Space</kbd> Play/Pause &nbsp;·&nbsp; <kbd>N</kbd> Next &nbsp;·&nbsp; <kbd>D</kbd> Day/Night &nbsp;·&nbsp; <kbd>R</kbd> Rain
+  </div>
+</div>
+
+<!-- Song list panel (slides up) -->
+<div id="songlist-panel" class="panel">
+  <div class="panel-header">
+    <span class="panel-label">📋 गाने की सूची</span>
+    <button id="songlist-close" class="panel-close" aria-label="Close">✕</button>
+  </div>
+  <div class="panel-body" id="songlist-body">
+    <p class="panel-placeholder">Loading playlist…</p>
+  </div>
+</div>
+
+<!-- Lyrics panel (slides up) -->
+<div id="lyrics-panel" class="panel">
+  <div class="panel-header">
+    <span class="panel-label">🎶 बोल / Lyrics</span>
+    <button id="lyrics-close" class="panel-close" aria-label="Close">✕</button>
+  </div>
+  <div class="panel-body" id="lyrics-body">
+    <p class="panel-placeholder">गाने के बोल यहाँ दिखेंगे…</p>
+  </div>
+</div>
+
+<!-- ===== PLAYER (completely redesigned) ===== -->
+<div id="player">
+  <div class="player-content">
+    <!-- Left: Art -->
+    <div class="player-art-wrap">
+      <img class="player-art" id="album-art" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Crect fill='%232a1a3e' width='56' height='56' rx='8'/%3E%3Ctext x='28' y='34' text-anchor='middle' fill='%23ffd6e6' font-size='22'%3E♫%3C/text%3E%3C/svg%3E" alt="Album">
+      <div class="player-vinyl" id="vinyl"></div>
+    </div>
+
+    <!-- Center: Info + controls -->
+    <div class="player-center">
+      <div class="player-track" id="track-title">Loading…</div>
+      
+      <!-- Prominent Progress Bar -->
+      <div class="player-timeline">
+        <span class="player-time" id="time-current">0:00</span>
+        <div class="player-progress" id="progress-bar">
+          <div class="player-progress-fill" id="progress-fill"></div>
+          <div class="player-progress-thumb" id="progress-thumb"></div>
+        </div>
+        <span class="player-time" id="time-total">0:00</span>
+      </div>
+    </div>
+
+    <!-- Right: Controls -->
+    <div class="player-controls">
+      <button class="p-btn" id="prev-btn" aria-label="Previous">
+        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
+      <button class="p-btn p-play" id="play-btn" aria-label="Play">
+        <svg viewBox="0 0 24 24" id="play-icon"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="p-btn" id="next-btn" aria-label="Next">
+        <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom row: extra actions -->
+  <div class="player-actions">
+    <button class="pa-btn" id="shuffle-btn" aria-label="Shuffle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+      <span>Shuffle</span>
+    </button>
+    <button class="pa-btn" id="songlist-btn" aria-label="Song List">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      <span>Songs</span>
+    </button>
+    <button class="pa-btn" id="lyrics-btn" aria-label="Lyrics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span>Lyrics</span>
+    </button>
+  </div>
+</div>
+
+<!-- Hidden YouTube -->
+<div style="position:fixed; bottom:0; right:0; opacity:0; pointer-events:none; z-index:-99;">
+  <div id="yt-player"></div>
+</div>
+
+<!-- Desktop Footer & Instructions -->
+<div class="footer-credit">made with <span style="color: #ff4d4d;">❤️</span> by Ayush Singh</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

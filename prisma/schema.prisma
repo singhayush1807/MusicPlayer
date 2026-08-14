@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Theme {
+  id             String   @id @default(cuid())
+  slug           String   @unique // e.g. "pyar-bhare-geet"
+  title          String
+  subtitle       String
+  playlistId     String
+  customSequence String?  // Optional JSON array string of custom video IDs
+  
+  // Backgrounds (Cloudinary URLs or local paths)
+  dayDesktop     String
+  dayMobile      String
+  nightDesktop   String
+  nightMobile    String
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
