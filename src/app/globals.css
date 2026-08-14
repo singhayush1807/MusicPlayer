@@ -18,6 +18,19 @@
 html, body { min-height: 100vh; touch-action: manipulation; }
 body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-font-smoothing: antialiased; }
 
+/* ===== LOADING SCREEN ===== */
+.loading-screen { position: fixed; inset: 0; z-index: 100;
+  background: #070412; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  transition: opacity 0.8s ease-in-out, visibility 0.8s; }
+.loading-screen.fade-out { opacity: 0; visibility: hidden; }
+.loading-spinner { width: 40px; height: 40px; border: 3px solid rgba(255,180,210,0.2);
+  border-top-color: #FF3366; border-radius: 50%;
+  animation: spin 1s linear infinite; margin-bottom: 20px; }
+.loading-text { font-family: var(--font-display); font-size: 16px; color: #fff;
+  letter-spacing: 2px; animation: pulse-dot 2s infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
 /* ===== BACKGROUND LAYERS (crossfade) ===== */
 .bg-layer { position: fixed; inset: 0; z-index: 0; background-size: cover;
   background-position: center; opacity: 0; 
@@ -196,6 +209,7 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
 .panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 .panel-placeholder { color: rgba(255,255,255,0.4); font-style: italic; text-align: center; padding: 40px 0; }
 .lyrics-text { text-align: center; white-space: pre-wrap; margin-top: 10px; }
+#lyrics-panel .panel-body { min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 
 /* Song list items */
 .song-item { display: flex; align-items: center; gap: 14px; padding: 10px 12px;
@@ -245,11 +259,15 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
   .p-play svg { width: 18px; height: 18px; }
   .player-actions { padding: 2px 12px 6px; gap: 2px; }
   .pa-btn { padding: 3px 8px; font-size: 9px; }
-  .pa-btn svg { width: 12px; height: 12px; }
   .panel.open { bottom: calc(var(--player-h) + 20px); max-height: 55vh; }
   .kbd-hints-inline { display: none; }
-  .together-input { font-size: 14px !important; letter-spacing: 0.2em !important; padding: 12px 10px !important; }
-  .together-btn.join { padding: 12px 20px !important; font-size: 13px !important; }
+  #together-panel { max-height: auto; }
+  #together-panel .panel-body { padding: 10px 16px 16px !important; flex: none; }
+  .together-menu p { font-size: 11px !important; margin-bottom: 12px !important; }
+  .together-btn.create { padding: 12px 20px !important; font-size: 13px !important; border-radius: 10px !important; }
+  .together-divider { margin: 10px 0 !important; font-size: 10px !important; }
+  .together-input { font-size: 13px !important; letter-spacing: 0.15em !important; padding: 12px 10px !important; border-radius: 10px !important; }
+  .together-btn.join { padding: 12px 20px !important; font-size: 13px !important; border-radius: 10px !important; }
 }
 
 /* Extra small (iPhone SE etc) */
@@ -367,11 +385,12 @@ body { font-family: var(--font-body); background: #070412; color: #fff; -webkit-
 /* Day mode overrides for Together */
 .day-mode .together-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #111; }
 .day-mode .together-input:focus { border-color: rgba(139, 92, 246, 0.5); }
-.day-mode .together-btn.join { background: #111; color: #fff; }
+.day-mode .together-btn.join { background: #111 !important; color: #fff !important; }
 .day-mode .together-copy-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.1); color: #333; }
 .day-mode .together-members { background: rgba(0,0,0,0.04); color: #555; }
 .day-mode .together-divider { color: rgba(0,0,0,0.3); }
 .day-mode .together-divider::before, .day-mode .together-divider::after { background: rgba(0,0,0,0.1); }
+.day-mode .together-menu p { color: rgba(0,0,0,0.6) !important; }
 
 /* ===== DAY MODE OVERRIDES ===== */
 .day-mode { color: #222; }

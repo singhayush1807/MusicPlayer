@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useListenTogether, type SyncAction } from '@/hooks/useListenTogether';
 
 export default function PlayerClient({ theme }: { theme: any }) {
+  const [appLoaded, setAppLoaded] = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [mode, setMode] = useState<'night' | 'day'>('night');
@@ -47,8 +48,23 @@ export default function PlayerClient({ theme }: { theme: any }) {
   const [isShuffle, setIsShuffle] = useState(false);
 
   useEffect(() => {
-    setIsMobile(window.innerWidth <= 768);
+    const isMobileView = window.innerWidth <= 768;
+    setIsMobile(isMobileView);
+    
+    // Auto Day/Night Detection
+    const h = new Date().getHours();
+    const initialMode = (h >= 6 && h < 18) ? 'day' : 'night';
+    setMode(initialMode);
+    
+    // Set immediate background to prevent flash
+    setBgA(initialMode === 'day' ? (isMobileView ? theme.dayMobile : theme.dayDesktop) : (isMobileView ? theme.nightMobile : theme.nightDesktop));
+
     setMounted(true);
+    
+    // Fade out loading screen after a short delay
+    setTimeout(() => {
+      setAppLoaded(true);
+    }, 800);
     
     // Init Petals
     const p = [];
@@ -96,7 +112,12 @@ export default function PlayerClient({ theme }: { theme: any }) {
     // Clock
     const tick = () => {
       let d = new Date();
-      setClock(String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'));
+      let hours = d.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const min = String(d.getMinutes()).padStart(2, '0');
+      setClock(`${hours}:${min} ${ampm}`);
     };
     tick();
     const clockInt = setInterval(tick, 30000);
@@ -132,6 +153,21 @@ export default function PlayerClient({ theme }: { theme: any }) {
     };
   }, []);
 
+  // Preload alternate backgrounds to prevent black flash
+  useEffect(() => {
+    const preloadUrls = [
+      theme.dayDesktop,
+      theme.dayMobile,
+      theme.nightDesktop,
+      theme.nightMobile
+    ].filter(Boolean);
+    
+    preloadUrls.forEach(url => {
+      const img = new Image();
+      img.src = url;
+    });
+  }, [theme]);
+
   // Mode changes
   useEffect(() => {
     const nextSrc = mode === 'day' 
@@ -156,7 +192,7 @@ export default function PlayerClient({ theme }: { theme: any }) {
     // We omit listType and list from pVars if we are binding to an existing iframe that already has the src set!
     let pVars: any = { 
       autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, 
-      rel: 0, showinfo: 0, iv_load_policy: 3
+      rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1
     };
 
     new (window as any).YT.Player('yt-player', {
@@ -216,6 +252,18 @@ export default function PlayerClient({ theme }: { theme: any }) {
       let clean = data.title.replace(/[\(\[].*?(official|video|lyric|audio).*?[\)\]]/gi, '').replace(/\|.*/, '').trim();
       setTitle(clean);
       setThumbnail(`https://img.youtube.com/vi/${data.video_id}/hqdefault.jpg`);
+      
+      // Setup Media Session API for background playback support
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: clean,
+          artist: 'MusicPrime',
+          album: theme.title || 'Playlist',
+          artwork: [
+            { src: `https://img.youtube.com/vi/${data.video_id}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }
+          ]
+        });
+      }
       
       setPlaylistItems(prev => {
         const arr = [...prev];
@@ -341,8 +389,17 @@ export default function PlayerClient({ theme }: { theme: any }) {
     }
   }, [currentIndex, currentTime, isPlaying]);
 
-  const together = useListenTogether(handleSyncAction);
-
+  const together = useListenTogether(
+    handleSyncAction,
+    useCallback(() => {
+      const ct = ytPlayer.current && typeof ytPlayer.current.getCurrentTime === 'function' ? ytPlayer.current.getCurrentTime() : currentTime;
+      return {
+        trackIndex: currentIndex,
+        currentTime: ct,
+        isPlaying
+      };
+    }, [currentIndex, currentTime, isPlaying])
+  );
   const copyRoomCode = () => {
     if (together.roomCode) {
       navigator.clipboard.writeText(together.roomCode);
@@ -392,6 +449,16 @@ export default function PlayerClient({ theme }: { theme: any }) {
     }
   };
 
+  // Register media session action handlers so background controls work
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', togglePlay);
+      navigator.mediaSession.setActionHandler('pause', togglePlay);
+      navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
+      navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
+    }
+  }, [togglePlay, prevTrack, nextTrack]);
+
   const fmtTime = (s: number) => {
     if (!s || isNaN(s)) return '0:00';
     let m = Math.floor(s / 60);
@@ -402,9 +469,15 @@ export default function PlayerClient({ theme }: { theme: any }) {
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <main suppressHydrationWarning className={`${mounted ? 'app-loaded' : ''} ${mode === 'day' ? 'day-mode' : 'night-mode'}`} style={{ height: '100vh', width: '100vw', overflow: 'hidden', position: 'fixed', top: 0, left: 0 }}>
+    <main suppressHydrationWarning className={`${appLoaded ? 'app-loaded' : ''} ${mode === 'day' ? 'day-mode' : 'night-mode'}`} style={{ height: '100vh', width: '100vw', overflow: 'hidden', position: 'fixed', top: 0, left: 0 }}>
       {/* Scroll Lock for Player Only */}
       <style>{`html, body { overflow: hidden !important; }`}</style>
+
+      {/* Premium Loading Screen */}
+      <div className={`loading-screen ${appLoaded ? 'fade-out' : ''}`}>
+        <div className="loading-spinner"></div>
+        <div className="loading-text">Tuning into the universe...</div>
+      </div>
 
       {/* Background Layers */}
       <div suppressHydrationWarning className={`bg-layer ${activeBg === 'A' ? 'visible' : ''}`} style={{ backgroundImage: `url("${bgA}")`, backgroundPosition: bgA?.includes('night') ? 'calc(50% + 28px) center' : 'center' }}></div>

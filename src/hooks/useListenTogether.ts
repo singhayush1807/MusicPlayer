@@ -11,7 +11,8 @@ export type SyncAction =
   | { type: 'seek'; currentTime: number }
   | { type: 'next' }
   | { type: 'prev' }
-  | { type: 'heartbeat'; trackIndex: number; currentTime: number; isPlaying: boolean };
+  | { type: 'heartbeat'; trackIndex: number; currentTime: number; isPlaying: boolean }
+  | { type: 'request_sync' };
 
 export interface RoomMember {
   id: string;
@@ -39,7 +40,8 @@ function generateRoomCode(): string {
 // ─── Hook ────────────────────────────────────────────
 export function useListenTogether(
   // Callbacks that the player provides so the hook can control it
-  onSyncAction: (action: SyncAction) => void
+  onSyncAction: (action: SyncAction) => void,
+  getLocalState: () => { trackIndex: number; currentTime: number; isPlaying: boolean }
 ) {
   const [state, setState] = useState<ListenTogetherState>({
     isConnected: false,
@@ -91,12 +93,23 @@ export function useListenTogether(
         );
         setState(s => ({ ...s, memberCount: count }));
       })
-      .on('presence', { event: 'join' }, () => {
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
         const presenceState = channel.presenceState();
         const count = Object.keys(presenceState).reduce(
           (acc, key) => acc + (presenceState[key] as any[]).length, 0
         );
         setState(s => ({ ...s, memberCount: count }));
+        
+        // If someone else joined, broadcast our state to them
+        const isMe = newPresences.some(p => p.id === myId.current);
+        if (!isMe) {
+          const st = getLocalState();
+          channel.send({
+            type: 'broadcast',
+            event: 'sync',
+            payload: { type: 'heartbeat', ...st }
+          });
+        }
       })
       .on('presence', { event: 'leave' }, () => {
         const presenceState = channel.presenceState();
@@ -119,7 +132,7 @@ export function useListenTogether(
       });
 
     channelRef.current = channel;
-  }, [onSyncAction]);
+  }, [onSyncAction, getLocalState]);
 
   // ── Join Room ────────────────────────────────────
   const joinRoom = useCallback((code: string) => {
@@ -143,7 +156,18 @@ export function useListenTogether(
     channel
       .on('broadcast', { event: 'sync' }, (payload) => {
         const action = payload.payload as SyncAction;
-        if (action) onSyncAction(action);
+        if (action) {
+          if (action.type === 'request_sync') {
+            const st = getLocalState();
+            channel.send({
+              type: 'broadcast',
+              event: 'sync',
+              payload: { type: 'heartbeat', ...st }
+            });
+          } else {
+            onSyncAction(action);
+          }
+        }
       })
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
@@ -152,12 +176,23 @@ export function useListenTogether(
         );
         setState(s => ({ ...s, memberCount: count }));
       })
-      .on('presence', { event: 'join' }, () => {
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
         const presenceState = channel.presenceState();
         const count = Object.keys(presenceState).reduce(
           (acc, key) => acc + (presenceState[key] as any[]).length, 0
         );
         setState(s => ({ ...s, memberCount: count }));
+        
+        // If someone else joined, broadcast our state to them
+        const isMe = newPresences.some(p => p.id === myId.current);
+        if (!isMe) {
+          const st = getLocalState();
+          channel.send({
+            type: 'broadcast',
+            event: 'sync',
+            payload: { type: 'heartbeat', ...st }
+          });
+        }
       })
       .on('presence', { event: 'leave' }, () => {
         const presenceState = channel.presenceState();
@@ -176,11 +211,18 @@ export function useListenTogether(
             roomCode: cleanCode,
             error: null,
           }));
+          
+          // Request initial state from others in the room
+          channel.send({
+            type: 'broadcast',
+            event: 'sync',
+            payload: { type: 'request_sync' }
+          });
         }
       });
 
     channelRef.current = channel;
-  }, [onSyncAction]);
+  }, [onSyncAction, getLocalState]);
 
   // ── Broadcast Action ─────────────────────────────
   const broadcastAction = useCallback((action: SyncAction) => {
