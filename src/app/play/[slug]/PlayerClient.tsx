@@ -32,6 +32,11 @@ export default function PlayerClient({ theme }: { theme: any }) {
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const fetchRetries = useRef(0);
   const isInit = useRef(false);
+  const keepaliveAudio = useRef<HTMLAudioElement | null>(null);
+  const wasPlayingRef = useRef(false);
+  const isPlayingRef = useRef(false);
+  const wakeLockRef = useRef<any>(null);
+  const noSleepVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Background state (for crossfade)
   const [bgA, setBgA] = useState(theme.nightDesktop);
@@ -110,12 +115,25 @@ export default function PlayerClient({ theme }: { theme: any }) {
       }
     }
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts — use ytPlayer ref directly to avoid stale closures
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-      if (e.code === 'KeyN') { nextTrack(); }
-      if (e.code === 'KeyP') { prevTrack(); }
+      if (!ytPlayer.current) return;
+      
+      if (e.code === 'Space') { 
+        e.preventDefault();
+        // Check actual player state, not React state (avoids stale closure)
+        if (typeof ytPlayer.current.getPlayerState === 'function') {
+          const state = ytPlayer.current.getPlayerState();
+          if (state === 1) { // PLAYING
+            ytPlayer.current.pauseVideo();
+          } else {
+            ytPlayer.current.playVideo();
+          }
+        }
+      }
+      if (e.code === 'KeyN') { ytPlayer.current.nextVideo?.(); }
+      if (e.code === 'KeyP') { ytPlayer.current.previousVideo?.(); }
       if (e.code === 'KeyD') { setMode(m => m === 'day' ? 'night' : 'day'); }
       if (e.code === 'KeyR') { setRainEnabled(r => !r); }
     };
@@ -156,12 +174,65 @@ export default function PlayerClient({ theme }: { theme: any }) {
       setHearts(prev => prev.filter(h => Date.now() - h.id < 4000));
     }, 2000);
 
+    // === Silent Audio Keepalive for Background Playback ===
+    // Mobile browsers kill iframe audio when backgrounded.
+    // A silent <audio> on the main page keeps the audio session alive.
+    const silenceDataUri = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+    const audio = new Audio(silenceDataUri);
+    audio.loop = true;
+    audio.volume = 0.01;
+    // iOS-specific: allow inline playback
+    (audio as any).playsInline = true;
+    (audio as any).setAttribute('playsinline', '');
+    keepaliveAudio.current = audio;
+
+    // === Visibility Change: auto-resume when returning to app ===
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        // Page going to background — record if we were playing
+        wasPlayingRef.current = isPlayingRef.current;
+      } else if (document.visibilityState === 'visible') {
+        // Returning from background — resume if we were playing
+        if (wasPlayingRef.current && ytPlayer.current) {
+          setTimeout(() => {
+            if (ytPlayer.current && typeof ytPlayer.current.getPlayerState === 'function') {
+              const state = ytPlayer.current.getPlayerState();
+              if (state === 2 || state === -1) {
+                ytPlayer.current.playVideo();
+              }
+            }
+          }, 300);
+        }
+        // Re-acquire wake lock (iOS releases it on background)
+        if (isPlayingRef.current && 'wakeLock' in navigator) {
+          (navigator as any).wakeLock.request('screen').then((wl: any) => {
+            wakeLockRef.current = wl;
+          }).catch(() => {});
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       window.removeEventListener('keydown', handleKey);
+      document.removeEventListener('visibilitychange', handleVisibility);
       clearInterval(clockInt);
       clearInterval(heartInt);
       clearInterval(heartCleanup);
       if (progressInterval.current) clearInterval(progressInterval.current);
+      if (keepaliveAudio.current) {
+        keepaliveAudio.current.pause();
+        keepaliveAudio.current = null;
+      }
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+      if (noSleepVideoRef.current) {
+        noSleepVideoRef.current.pause();
+        noSleepVideoRef.current.remove();
+        noSleepVideoRef.current = null;
+      }
     };
   }, []);
 
@@ -222,7 +293,51 @@ export default function PlayerClient({ theme }: { theme: any }) {
         },
         onStateChange: (event: any) => {
           ytPlayer.current = event.target;
-          setIsPlaying(event.data === (window as any).YT.PlayerState.PLAYING);
+          const playing = event.data === (window as any).YT.PlayerState.PLAYING;
+          setIsPlaying(playing);
+          isPlayingRef.current = playing;
+          
+          // Manage keepalive, wake lock & MediaSession state
+          if (playing) {
+            // Start keepalive so browser doesn't suspend our audio session
+            if (keepaliveAudio.current && keepaliveAudio.current.paused) {
+              keepaliveAudio.current.play().catch(() => {});
+            }
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+            
+            // Screen Wake Lock — keeps screen on (critical for iOS)
+            if ('wakeLock' in navigator) {
+              (navigator as any).wakeLock.request('screen').then((wl: any) => {
+                wakeLockRef.current = wl;
+              }).catch(() => {});
+            } else {
+              // NoSleep fallback for older iOS: play a tiny looping video
+              if (!noSleepVideoRef.current) {
+                const v = document.createElement('video');
+                v.setAttribute('playsinline', '');
+                v.setAttribute('muted', '');
+                v.setAttribute('loop', '');
+                v.style.cssText = 'position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;';
+                // Minimal MP4 that loops — keeps iOS awake
+                v.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAAhtZGF0AAAA1m1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAAAAAAEAAAEAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAACGdHJhawAAAFx0a2hkAAAAAwAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAACOdWR0YQAAAIZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyAAAAAAAAAAAAAAAAAAAAZ2lsc3QAAAAvAAAAG2NvbnRlbnRfdHlwZQAAAABpbWFnZS9qcGVn';
+                document.body.appendChild(v);
+                v.play().catch(() => {});
+                noSleepVideoRef.current = v;
+              } else {
+                noSleepVideoRef.current.play().catch(() => {});
+              }
+            }
+          } else {
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            // Release wake lock when paused
+            if (wakeLockRef.current) {
+              wakeLockRef.current.release().catch(() => {});
+              wakeLockRef.current = null;
+            }
+            if (noSleepVideoRef.current) {
+              noSleepVideoRef.current.pause();
+            }
+          }
           
           if (
             event.data === (window as any).YT.PlayerState.PLAYING || 
@@ -249,10 +364,25 @@ export default function PlayerClient({ theme }: { theme: any }) {
 
   const startProgressInterval = () => {
     if (progressInterval.current) clearInterval(progressInterval.current);
+    let positionTick = 0;
     progressInterval.current = setInterval(() => {
       if (ytPlayer.current && typeof ytPlayer.current.getCurrentTime === 'function') {
-        setCurrentTime(ytPlayer.current.getCurrentTime());
-        setDuration(ytPlayer.current.getDuration());
+        const ct = ytPlayer.current.getCurrentTime();
+        const dur = ytPlayer.current.getDuration();
+        setCurrentTime(ct);
+        setDuration(dur);
+        
+        // Sync lock screen seekbar every ~5s
+        positionTick++;
+        if (positionTick % 10 === 0 && 'mediaSession' in navigator && dur > 0) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: dur,
+              playbackRate: 1,
+              position: Math.min(ct, dur)
+            });
+          } catch(e) {}
+        }
       }
     }, 500);
   };
@@ -272,9 +402,22 @@ export default function PlayerClient({ theme }: { theme: any }) {
           artist: 'MusicPrime',
           album: theme.title || 'Playlist',
           artwork: [
+            { src: `https://img.youtube.com/vi/${data.video_id}/mqdefault.jpg`, sizes: '320x180', type: 'image/jpeg' },
             { src: `https://img.youtube.com/vi/${data.video_id}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }
           ]
         });
+        // Update position state for lock screen seekbar
+        try {
+          const dur = ytPlayer.current?.getDuration?.() || 0;
+          const pos = ytPlayer.current?.getCurrentTime?.() || 0;
+          if (dur > 0) {
+            navigator.mediaSession.setPositionState({
+              duration: dur,
+              playbackRate: 1,
+              position: Math.min(pos, dur)
+            });
+          }
+        } catch(e) {}
       }
       
       setPlaylistItems(prev => {
@@ -461,15 +604,36 @@ export default function PlayerClient({ theme }: { theme: any }) {
     }
   };
 
-  // Register media session action handlers so background controls work
+  // Register media session action handlers so earphone/lock screen controls work
   useEffect(() => {
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', togglePlay);
-      navigator.mediaSession.setActionHandler('pause', togglePlay);
-      navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
-      navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (ytPlayer.current && typeof ytPlayer.current.playVideo === 'function') {
+          ytPlayer.current.playVideo();
+        }
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (ytPlayer.current && typeof ytPlayer.current.pauseVideo === 'function') {
+          ytPlayer.current.pauseVideo();
+        }
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (ytPlayer.current && typeof ytPlayer.current.previousVideo === 'function') {
+          ytPlayer.current.previousVideo();
+        }
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (ytPlayer.current && typeof ytPlayer.current.nextVideo === 'function') {
+          ytPlayer.current.nextVideo();
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime != null && ytPlayer.current && typeof ytPlayer.current.seekTo === 'function') {
+          ytPlayer.current.seekTo(details.seekTime, true);
+        }
+      });
     }
-  }, [togglePlay, prevTrack, nextTrack]);
+  }, []);
 
   const fmtTime = (s: number) => {
     if (!s || isNaN(s)) return '0:00';
