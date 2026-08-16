@@ -175,8 +175,6 @@ export default function PlayerClient({ theme }: { theme: any }) {
     }, 2000);
 
     // === Silent Audio Keepalive for Background Playback ===
-    // Mobile browsers kill iframe audio when backgrounded.
-    // A silent <audio> on the main page keeps the audio session alive.
     const silenceDataUri = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
     const audio = new Audio(silenceDataUri);
     audio.loop = true;
@@ -185,6 +183,21 @@ export default function PlayerClient({ theme }: { theme: any }) {
     (audio as any).playsInline = true;
     (audio as any).setAttribute('playsinline', '');
     keepaliveAudio.current = audio;
+
+    // === Unlock Audio Context ===
+    // Browsers block audio.play() if not triggered by user interaction.
+    // We bind a one-time listener to any click/touch to "bless" the audio element.
+    const unlockAudio = () => {
+      if (keepaliveAudio.current) {
+        keepaliveAudio.current.play().then(() => {
+          if (!isPlayingRef.current && keepaliveAudio.current) keepaliveAudio.current.pause();
+        }).catch(() => {});
+      }
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
+    document.addEventListener('click', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
 
     // === Visibility Change: auto-resume when returning to app ===
     const handleVisibility = () => {
@@ -233,6 +246,8 @@ export default function PlayerClient({ theme }: { theme: any }) {
         noSleepVideoRef.current.remove();
         noSleepVideoRef.current = null;
       }
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
     };
   }, []);
 
@@ -288,6 +303,21 @@ export default function PlayerClient({ theme }: { theme: any }) {
             ytPlayer.current.loadPlaylist(customSequence);
           }
           event.target.setVolume(100);
+          
+          // Restore saved state if tab was suspended
+          const savedIndex = sessionStorage.getItem('mp_saved_index');
+          const savedTime = sessionStorage.getItem('mp_saved_time');
+          if (savedIndex) {
+            ytPlayer.current.playVideoAt(parseInt(savedIndex));
+            if (savedTime) {
+              setTimeout(() => {
+                if (ytPlayer.current && typeof ytPlayer.current.seekTo === 'function') {
+                  ytPlayer.current.seekTo(parseFloat(savedTime), true);
+                }
+              }, 500);
+            }
+          }
+          
           startProgressInterval();
           setTimeout(fetchPlaylist, 1500);
         },
@@ -371,6 +401,14 @@ export default function PlayerClient({ theme }: { theme: any }) {
         const dur = ytPlayer.current.getDuration();
         setCurrentTime(ct);
         setDuration(dur);
+        
+        // Save state for auto-resume if tab suspends
+        if (typeof ytPlayer.current.getPlaylistIndex === 'function') {
+          sessionStorage.setItem('mp_saved_index', ytPlayer.current.getPlaylistIndex().toString());
+        }
+        if (ct > 0) {
+          sessionStorage.setItem('mp_saved_time', ct.toString());
+        }
         
         // Sync lock screen seekbar every ~5s
         positionTick++;
