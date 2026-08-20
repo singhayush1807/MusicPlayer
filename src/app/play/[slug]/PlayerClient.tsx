@@ -33,6 +33,8 @@ export default function PlayerClient({ theme }: { theme: any }) {
   const fetchRetries = useRef(0);
   const isInit = useRef(false);
   const keepaliveAudio = useRef<HTMLAudioElement | null>(null);
+  const keepaliveAudioCtx = useRef<AudioContext | null>(null);
+  const userPausedRef = useRef(false);
   const wasPlayingRef = useRef(false);
   const isPlayingRef = useRef(false);
   const wakeLockRef = useRef<any>(null);
@@ -122,12 +124,15 @@ export default function PlayerClient({ theme }: { theme: any }) {
       
       if (e.code === 'Space') { 
         e.preventDefault();
+        e.stopPropagation();
         // Check actual player state, not React state (avoids stale closure)
         if (typeof ytPlayer.current.getPlayerState === 'function') {
           const state = ytPlayer.current.getPlayerState();
           if (state === 1) { // PLAYING
+            userPausedRef.current = true;
             ytPlayer.current.pauseVideo();
           } else {
+            userPausedRef.current = false;
             ytPlayer.current.playVideo();
           }
         }
@@ -174,7 +179,25 @@ export default function PlayerClient({ theme }: { theme: any }) {
       setHearts(prev => prev.filter(h => Date.now() - h.id < 4000));
     }, 2000);
 
-    // === Silent Audio Keepalive for Background Playback ===
+    // Setup MediaSession handlers to distinguish user pause from OS auto-pause
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => {
+        userPausedRef.current = false;
+        if (ytPlayer.current) ytPlayer.current.playVideo();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        userPausedRef.current = true;
+        if (ytPlayer.current) ytPlayer.current.pauseVideo();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (ytPlayer.current) ytPlayer.current.nextVideo?.();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (ytPlayer.current) ytPlayer.current.previousVideo?.();
+      });
+    }
+
+    // === Web Audio API + HTML5 Audio Keepalive for Background Playback ===
     const silenceDataUri = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
     const audio = new Audio(silenceDataUri);
     audio.loop = true;
@@ -184,6 +207,20 @@ export default function PlayerClient({ theme }: { theme: any }) {
     (audio as any).setAttribute('playsinline', '');
     keepaliveAudio.current = audio;
 
+    if (!keepaliveAudioCtx.current && (window.AudioContext || (window as any).webkitAudioContext)) {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        keepaliveAudioCtx.current = new AudioContextClass();
+        const oscillator = keepaliveAudioCtx.current.createOscillator();
+        const gainNode = keepaliveAudioCtx.current.createGain();
+        gainNode.gain.value = 0; // Pure silence
+        oscillator.connect(gainNode);
+        gainNode.connect(keepaliveAudioCtx.current.destination);
+        oscillator.start();
+        keepaliveAudioCtx.current.suspend();
+      } catch (e) {}
+    }
+
     // === Unlock Audio Context ===
     // Browsers block audio.play() if not triggered by user interaction.
     // We bind a one-time listener to any click/touch to "bless" the audio element.
@@ -192,6 +229,12 @@ export default function PlayerClient({ theme }: { theme: any }) {
         keepaliveAudio.current.play().then(() => {
           if (!isPlayingRef.current && keepaliveAudio.current) keepaliveAudio.current.pause();
         }).catch(() => {});
+      }
+      if (keepaliveAudioCtx.current && keepaliveAudioCtx.current.state === 'suspended') {
+        keepaliveAudioCtx.current.resume().catch(() => {});
+        setTimeout(() => {
+          if (!isPlayingRef.current && keepaliveAudioCtx.current) keepaliveAudioCtx.current.suspend().catch(() => {});
+        }, 100);
       }
       document.removeEventListener('click', unlockAudio);
       document.removeEventListener('touchstart', unlockAudio);
@@ -236,6 +279,10 @@ export default function PlayerClient({ theme }: { theme: any }) {
       if (keepaliveAudio.current) {
         keepaliveAudio.current.pause();
         keepaliveAudio.current = null;
+      }
+      if (keepaliveAudioCtx.current) {
+        keepaliveAudioCtx.current.close().catch(() => {});
+        keepaliveAudioCtx.current = null;
       }
       if (wakeLockRef.current) {
         wakeLockRef.current.release().catch(() => {});
@@ -323,32 +370,52 @@ export default function PlayerClient({ theme }: { theme: any }) {
         },
         onStateChange: (event: any) => {
           ytPlayer.current = event.target;
-          const playing = event.data === (window as any).YT.PlayerState.PLAYING;
-          setIsPlaying(playing);
-          isPlayingRef.current = playing;
+          const state = event.data;
+          const playing = state === (window as any).YT.PlayerState.PLAYING;
           
-          // Manage keepalive, wake lock & MediaSession state
-          if (playing) {
-            // Start keepalive so browser doesn't suspend our audio session
+          if (state === (window as any).YT.PlayerState.PAUSED) {
+            // Aggressive Resume: OS might have auto-paused iframe due to screen off/recents
+            if (document.visibilityState === 'hidden' && isPlayingRef.current && !userPausedRef.current) {
+              ytPlayer.current.playVideo();
+              return; // Do not update state to paused
+            } else {
+              setIsPlaying(false);
+              isPlayingRef.current = false;
+              if (keepaliveAudio.current) keepaliveAudio.current.pause();
+              if (keepaliveAudioCtx.current) keepaliveAudioCtx.current.suspend().catch(() => {});
+              if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+              if (wakeLockRef.current) {
+                wakeLockRef.current.release().catch(() => {});
+                wakeLockRef.current = null;
+              }
+              if (noSleepVideoRef.current) {
+                noSleepVideoRef.current.pause();
+              }
+            }
+          } else if (state === (window as any).YT.PlayerState.PLAYING) {
+            setIsPlaying(true);
+            isPlayingRef.current = true;
+            userPausedRef.current = false; // reset flag
+            
             if (keepaliveAudio.current && keepaliveAudio.current.paused) {
               keepaliveAudio.current.play().catch(() => {});
             }
+            if (keepaliveAudioCtx.current && keepaliveAudioCtx.current.state === 'suspended') {
+              keepaliveAudioCtx.current.resume().catch(() => {});
+            }
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             
-            // Screen Wake Lock — keeps screen on (critical for iOS)
             if ('wakeLock' in navigator) {
               (navigator as any).wakeLock.request('screen').then((wl: any) => {
                 wakeLockRef.current = wl;
               }).catch(() => {});
             } else {
-              // NoSleep fallback for older iOS: play a tiny looping video
               if (!noSleepVideoRef.current) {
                 const v = document.createElement('video');
                 v.setAttribute('playsinline', '');
                 v.setAttribute('muted', '');
                 v.setAttribute('loop', '');
                 v.style.cssText = 'position:fixed;top:-1px;left:-1px;width:1px;height:1px;opacity:0.01;pointer-events:none;';
-                // Minimal MP4 that loops — keeps iOS awake
                 v.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAAhtZGF0AAAA1m1vb3YAAABsbXZoZAAAAAAAAAAAAAAAAAAAA+gAAAAAAAEAAAEAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAACGdHJhawAAAFx0a2hkAAAAAwAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAACOdWR0YQAAAIZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyAAAAAAAAAAAAAAAAAAAAZ2lsc3QAAAAvAAAAG2NvbnRlbnRfdHlwZQAAAABpbWFnZS9qcGVn';
                 document.body.appendChild(v);
                 v.play().catch(() => {});
@@ -357,16 +424,11 @@ export default function PlayerClient({ theme }: { theme: any }) {
                 noSleepVideoRef.current.play().catch(() => {});
               }
             }
-          } else {
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-            // Release wake lock when paused
-            if (wakeLockRef.current) {
-              wakeLockRef.current.release().catch(() => {});
-              wakeLockRef.current = null;
-            }
-            if (noSleepVideoRef.current) {
-              noSleepVideoRef.current.pause();
-            }
+          } else if (state === (window as any).YT.PlayerState.ENDED) {
+            setIsPlaying(false);
+            isPlayingRef.current = false;
+            if (keepaliveAudio.current) keepaliveAudio.current.pause();
+            if (keepaliveAudioCtx.current) keepaliveAudioCtx.current.suspend().catch(() => {});
           }
           
           if (
@@ -604,11 +666,13 @@ export default function PlayerClient({ theme }: { theme: any }) {
   const togglePlay = () => {
     if (!ytPlayer.current) return;
     if (isPlaying && typeof ytPlayer.current.pauseVideo === 'function') {
+      userPausedRef.current = true;
       ytPlayer.current.pauseVideo();
       if (together.isInRoom && !syncLock.current) {
         together.broadcastAction({ type: 'pause', currentTime: ytPlayer.current.getCurrentTime?.() || 0 });
       }
     } else if (typeof ytPlayer.current.playVideo === 'function') {
+      userPausedRef.current = false;
       ytPlayer.current.playVideo();
       if (together.isInRoom && !syncLock.current) {
         together.broadcastAction({ type: 'play', trackIndex: currentIndex, currentTime: ytPlayer.current.getCurrentTime?.() || 0 });
