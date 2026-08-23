@@ -30,9 +30,16 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('/api/themes');
       const data = await res.json();
-      setThemes(data);
+      if (res.ok) {
+        setThemes(data);
+      } else {
+        console.error('Failed to fetch themes:', data);
+        alert('Failed to load themes. Database connection error.');
+        setThemes([]);
+      }
     } catch (e) {
       console.error(e);
+      setThemes([]);
     } finally {
       setLoading(false);
     }
