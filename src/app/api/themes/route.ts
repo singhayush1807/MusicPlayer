@@ -20,6 +20,15 @@ export async function POST(req: Request) {
     let slug = data.slug;
     if (!slug) {
       slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      if (!slug) {
+        slug = `theme-${Date.now()}`;
+      }
+    }
+
+    // Try to ensure uniqueness
+    const existingTheme = await prisma.theme.findUnique({ where: { slug } });
+    if (existingTheme) {
+      slug = `${slug}-${Date.now()}`;
     }
 
     const theme = await prisma.theme.create({
