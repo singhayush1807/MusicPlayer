@@ -2,6 +2,8 @@ import Link from 'next/link';
 import prisma from '@/lib/db';
 import { FiPlay, FiMusic, FiArrowRight, FiHeadphones, FiArrowUpRight } from 'react-icons/fi';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ExplorePage() {
   const themes = await prisma.theme.findMany({
     orderBy: { createdAt: 'desc' }
