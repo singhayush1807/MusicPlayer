@@ -51,6 +51,6 @@ export async function POST(req: Request) {
     if (error.code === 'P2002') {
       return NextResponse.json({ error: 'A theme with this slug already exists' }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Failed to create theme' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create theme', details: String(error), stack: error.stack }, { status: 500 });
   }
 }
