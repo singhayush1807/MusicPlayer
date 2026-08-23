@@ -7,8 +7,8 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     });
     return NextResponse.json(themes);
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch themes' }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to fetch themes', details: String(error) }, { status: 500 });
   }
 }
 
