@@ -1,14 +1,20 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: "postgresql://postgres:ayush8252043282tanya7004953482@db.wtqhaarkmdqashehvmdp.supabase.co:6543/postgres?pgbouncer=true"
+    }
+  }
+});
 
 async function main() {
   try {
     const theme = await prisma.theme.create({
       data: {
-        title: "Test Theme",
+        title: "Test Local",
         subtitle: "A test theme",
-        slug: "test-theme-" + Date.now(),
+        slug: "test-local-" + Date.now(),
         playlistId: "PLRiJDPquklv4",
         customSequence: null,
         dayDesktop: "https://example.com/dayD.png",
