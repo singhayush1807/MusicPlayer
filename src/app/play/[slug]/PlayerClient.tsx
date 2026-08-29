@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { useListenTogether, type SyncAction } from '@/hooks/useListenTogether';
+
+const YTContainer = memo(() => <div id="yt-player"></div>, () => true);
 
 export default function PlayerClient({ theme }: { theme: any }) {
   const [appLoaded, setAppLoaded] = useState(false);
@@ -341,7 +343,14 @@ export default function PlayerClient({ theme }: { theme: any }) {
       origin: window.location.origin
     };
 
-    new (window as any).YT.Player('yt-player', {
+    if (customSequence.length === 0) {
+      pVars.listType = 'playlist';
+      pVars.list = theme.playlistId || 'PLRiJDPquklv4cT2O5-gD4_C0-8a_R4NfO';
+    } else {
+      pVars.videoId = customSequence[0];
+    }
+    
+    let playerOptions: any = {
       playerVars: pVars,
       events: {
         onReady: (event: any) => {
@@ -458,7 +467,8 @@ export default function PlayerClient({ theme }: { theme: any }) {
           }
         }
       }
-    });
+    };
+    new (window as any).YT.Player('yt-player', playerOptions);
   };
 
   const startProgressInterval = () => {
@@ -1081,7 +1091,7 @@ export default function PlayerClient({ theme }: { theme: any }) {
 
       {/* Hidden YouTube Iframe that must be visible enough to browser so it doesn't throttle playback */}
       <div style={{ position: 'fixed', top: 0, left: 0, width: '200px', height: '200px', opacity: 0.01, pointerEvents: 'none', zIndex: -99 }}>
-        <div dangerouslySetInnerHTML={{ __html: '<div id="yt-player"></div>' }}></div>
+        <YTContainer />
       </div>
 
       <div className="footer-credit">made with <span style={{color: '#ff4d4d'}}>❤️</span> by Ayush Singh</div>
