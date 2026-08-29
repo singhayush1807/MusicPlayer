@@ -334,13 +334,15 @@ export default function PlayerClient({ theme }: { theme: any }) {
       if (theme.customSequence) customSequence = JSON.parse(theme.customSequence);
     } catch(e){}
 
-    // We omit listType and list from pVars if we are binding to an existing iframe that already has the src set!
     let pVars: any = { 
       autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, 
-      rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1
+      rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1,
+      enablejsapi: 1,
+      origin: window.location.origin
     };
 
     new (window as any).YT.Player('yt-player', {
+      playerVars: pVars,
       events: {
         onReady: (event: any) => {
           ytPlayer.current = event.target;
@@ -348,6 +350,11 @@ export default function PlayerClient({ theme }: { theme: any }) {
           setTitle("Ready — Click Play to Start");
           if (customSequence.length > 0) {
             ytPlayer.current.loadPlaylist(customSequence);
+          } else {
+            ytPlayer.current.loadPlaylist({
+              list: theme.playlistId || 'PLRiJDPquklv4cT2O5-gD4_C0-8a_R4NfO',
+              listType: 'playlist'
+            });
           }
           event.target.setVolume(100);
           
@@ -1074,13 +1081,7 @@ export default function PlayerClient({ theme }: { theme: any }) {
 
       {/* Hidden YouTube Iframe that must be visible enough to browser so it doesn't throttle playback */}
       <div style={{ position: 'fixed', top: 0, left: 0, width: '200px', height: '200px', opacity: 0.01, pointerEvents: 'none', zIndex: -99 }}>
-        <iframe 
-          id="yt-player" 
-          width="200" height="200" 
-          src={`https://www.youtube.com/embed/videoseries?list=${theme.playlistId || 'PLRiJDPquklv4'}&enablejsapi=1&autoplay=1&controls=0`}
-          frameBorder="0" 
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        ></iframe>
+        <div dangerouslySetInnerHTML={{ __html: '<div id="yt-player"></div>' }}></div>
       </div>
 
       <div className="footer-credit">made with <span style={{color: '#ff4d4d'}}>❤️</span> by Ayush Singh</div>
