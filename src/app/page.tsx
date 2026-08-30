@@ -5,9 +5,24 @@ import { FiPlay, FiMusic, FiArrowRight, FiHeadphones, FiArrowUpRight } from 'rea
 export const dynamic = 'force-dynamic';
 
 export default async function ExplorePage() {
-  const themes = await prisma.theme.findMany({
-    orderBy: { createdAt: 'desc' }
-  });
+  let themes: any[] = [];
+  try {
+    themes = await prisma.theme.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (e) {
+    // DB unreachable (Supabase paused?) — use fallback
+    console.warn('[MusicPrime] DB unreachable, using fallback themes');
+    themes = [{
+      id: 'fallback-pyar',
+      slug: 'pyar-bhare-geet',
+      title: 'प्यार भरे गीत',
+      subtitle: 'Lo-fi love · all night',
+      playlistId: 'PLRiJDPquklv4cT2O5-gD4_C0-8a_R4NfO',
+      nightDesktop: '/assets/DesktopNight.png',
+      createdAt: new Date(),
+    }];
+  }
 
   return (
     <main suppressHydrationWarning style={{ 

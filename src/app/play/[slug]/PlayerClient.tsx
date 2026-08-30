@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, memo } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useListenTogether, type SyncAction } from '@/hooks/useListenTogether';
 
-const YTContainer = memo(() => <div id="yt-player"></div>, () => true);
+// Global singleton guard — survives React Strict Mode double-mount
+let ytPlayerGlobal: any = null;
+let ytInitialized = false;
 
 export default function PlayerClient({ theme }: { theme: any }) {
   const [appLoaded, setAppLoaded] = useState(false);
@@ -33,7 +35,6 @@ export default function PlayerClient({ theme }: { theme: any }) {
   const ytPlayer = useRef<any>(null);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const fetchRetries = useRef(0);
-  const isInit = useRef(false);
   const keepaliveAudio = useRef<HTMLAudioElement | null>(null);
   const keepaliveAudioCtx = useRef<AudioContext | null>(null);
   const userPausedRef = useRef(false);
@@ -102,12 +103,26 @@ export default function PlayerClient({ theme }: { theme: any }) {
     }
     setPetals(p);
 
-    // Setup YouTube IFrame API - Robust Polling
-    if (!isInit.current) {
-      isInit.current = true;
+    // Setup YouTube IFrame API — global singleton guard
+    if (!ytInitialized) {
+      ytInitialized = true;
+
+      // Ensure the yt-player div exists in the DOM
+      const ensureContainer = () => {
+        if (!document.getElementById('yt-player')) {
+          const container = document.getElementById('yt-player-wrapper');
+          if (container) {
+            const div = document.createElement('div');
+            div.id = 'yt-player';
+            container.appendChild(div);
+          }
+        }
+      };
+
       const checkYT = setInterval(() => {
         if ((window as any).YT && (window as any).YT.Player) {
           clearInterval(checkYT);
+          ensureContainer();
           initPlayer();
         }
       }, 200);
@@ -117,6 +132,13 @@ export default function PlayerClient({ theme }: { theme: any }) {
         tag.src = 'https://www.youtube.com/iframe_api';
         document.body.appendChild(tag);
       }
+    } else if (ytPlayerGlobal) {
+      // Strict Mode re-mount: reuse existing global player
+      ytPlayer.current = ytPlayerGlobal;
+      setPlayerReady(true);
+      setTitle("Ready — Click Play to Start");
+      startProgressInterval();
+      setTimeout(fetchPlaylist, 1500);
     }
 
     // Keyboard shortcuts — use ytPlayer ref directly to avoid stale closures
@@ -331,41 +353,48 @@ export default function PlayerClient({ theme }: { theme: any }) {
   }, [mode, isMobile, theme]);
 
   const initPlayer = () => {
-    let customSequence = [];
+    // Guard: if already initialized (HMR / Strict Mode), reuse
+    if (ytPlayerGlobal) {
+      ytPlayer.current = ytPlayerGlobal;
+      setPlayerReady(true);
+      setTitle("Ready — Click Play to Start");
+      startProgressInterval();
+      setTimeout(fetchPlaylist, 1500);
+      return;
+    }
+
+    let customSequence: string[] = [];
     try {
       if (theme.customSequence) customSequence = JSON.parse(theme.customSequence);
     } catch(e){}
 
+    // Match legacy app.js exactly: let playerVars handle playlist loading
     let pVars: any = { 
       autoplay: 1, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, 
-      rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1,
-      enablejsapi: 1,
-      origin: window.location.origin
+      rel: 0, showinfo: 0, iv_load_policy: 3, playsinline: 1
     };
 
     if (customSequence.length === 0) {
       pVars.listType = 'playlist';
       pVars.list = theme.playlistId || 'PLRiJDPquklv4cT2O5-gD4_C0-8a_R4NfO';
-    } else {
-      pVars.videoId = customSequence[0];
     }
     
-    let playerOptions: any = {
+    new (window as any).YT.Player('yt-player', {
+      height: '200',
+      width: '200',
       playerVars: pVars,
       events: {
         onReady: (event: any) => {
           ytPlayer.current = event.target;
+          ytPlayerGlobal = event.target;
           setPlayerReady(true);
           setTitle("Ready — Click Play to Start");
+          // Only call loadPlaylist for custom sequences (playerVars already handles normal playlists)
           if (customSequence.length > 0) {
             ytPlayer.current.loadPlaylist(customSequence);
-          } else {
-            ytPlayer.current.loadPlaylist({
-              list: theme.playlistId || 'PLRiJDPquklv4cT2O5-gD4_C0-8a_R4NfO',
-              listType: 'playlist'
-            });
           }
           event.target.setVolume(100);
+          event.target.playVideo();
           
           // Restore saved state if tab was suspended
           const savedIndex = sessionStorage.getItem('mp_saved_index');
@@ -461,14 +490,14 @@ export default function PlayerClient({ theme }: { theme: any }) {
         },
         onError: (event: any) => {
           ytPlayer.current = event.target;
+          ytPlayerGlobal = event.target;
           
           if(typeof ytPlayer.current.nextVideo === 'function') {
              setTimeout(() => ytPlayer.current.nextVideo(), 2000);
           }
         }
       }
-    };
-    new (window as any).YT.Player('yt-player', playerOptions);
+    });
   };
 
   const startProgressInterval = () => {
@@ -1089,9 +1118,9 @@ export default function PlayerClient({ theme }: { theme: any }) {
         </div>
       </div>
 
-      {/* Hidden YouTube Iframe that must be visible enough to browser so it doesn't throttle playback */}
-      <div style={{ position: 'fixed', top: 0, left: 0, width: '200px', height: '200px', opacity: 0.01, pointerEvents: 'none', zIndex: -99 }}>
-        <YTContainer />
+      {/* Hidden YouTube — ref-based container so DOM is guaranteed to exist */}
+      <div id="yt-player-wrapper" style={{ position: 'fixed', top: 0, left: 0, width: '200px', height: '200px', opacity: 0.01, pointerEvents: 'none', zIndex: -99 }}>
+        <div id="yt-player"></div>
       </div>
 
       <div className="footer-credit">made with <span style={{color: '#ff4d4d'}}>❤️</span> by Ayush Singh</div>
